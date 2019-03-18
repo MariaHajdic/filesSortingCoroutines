@@ -1,7 +1,12 @@
+#include "merge_sort.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
-#include "merge_sort.h"
+#include "aio.h"
+#include "errno.h"
+#include "fcntl.h"
+#include "sys/stat.h"
+#include "unistd.h"
 
 void merge_results(array *results, int n) {
     FILE *fres = fopen("res.txt","w");
@@ -81,25 +86,59 @@ void merge_sort(array arr, array res, struct coroutine *ctx) {
     free(tmp.data); yield;
 }
 
+int async_fread(struct coroutine *ctx, char* fname, array *input) {
+    int f = open(fname,S_IREAD); yield;
+    if (f == -1) return -1;
+
+    char buff[256]; 
+    struct aiocb params; 
+    params.aio_fildes = f; yield;
+    params.aio_offset = 0; yield;
+    params.aio_lio_opcode = LIO_READ; yield;
+    params.aio_nbytes = 256; yield;
+    params.aio_buf = buff; yield;
+
+    int number = 0, data_size = 4;
+    input->data = malloc(data_size*sizeof(int)); yield;
+    input->len = 0; yield;
+    while (true) {
+        if (aio_read(&params) != 0) return -1;
+        while (aio_error(&params) == EINPROGRESS) {
+            yield;
+        }
+        int bytes_read = aio_return(&params); yield;
+        if (bytes_read == 0) break;
+
+        params.aio_offset += bytes_read; yield;
+        for (int i = 0; i < bytes_read; ++i) {
+            if (buff[i] == ' ' || buff[i] == EOF) {
+                input->data[input->len++] = number; yield;
+                number = 0; yield;
+                if (input->len >= data_size) {
+                    int *temp = input->data; yield;
+                    input->data = malloc(data_size*2*sizeof(int)); yield;
+                    memcpy(input->data,temp,data_size*sizeof(int)); yield;
+                    free(temp); yield;
+                    data_size *= 2; yield;
+                }
+                continue;
+            }
+            number = number * 10 + (buff[i] - '0'); yield;
+        }
+    }
+    close(f); yield;
+    return 0;
+}
+
 void sort_init(struct coroutine *ctx, char* fname, int *num_finished, array *result) {
     begin;
-    FILE* fptr = fopen(fname,"r"); yield;
-    if (fptr == NULL) {
-        printf("File not opened/n"); finish;
-    } 
-
-    array buff;
-    int tmp[1024*50];
-    buff.data = tmp; yield;
-    buff.len = 0; yield;
-
-    while (!feof(fptr)) {
-        fscanf(fptr,"%d",&buff.data[buff.len++]); yield;
+    array buff; 
+    if (async_fread(ctx,fname,&buff) == -1) {
+        printf("Unable to read file\n"); finish;
     }
-    fclose(fptr); yield;
-
     result->data = malloc(buff.len*sizeof(int)); yield;
     result->len = buff.len; yield;
     merge_sort(buff,*result,ctx); yield;
+    free(buff.data); yield;
     finish;
 }

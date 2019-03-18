@@ -1,10 +1,10 @@
+#include "merge_sort.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
-#include "merge_sort.h"
 
 #define handle_error(msg) \
-   do { perror(msg); exit(EXIT_FAILURE); } while (0)
+do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
 static void *allocate_stack() {
     return mmap(NULL, stack_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
@@ -35,13 +35,16 @@ int main(int argc, char *argv[]) {
         if (swapcontext(&main_ctx,&coroutines[i].context) == -1)
             handle_error("swapcontext");
     }
-
-    free(coroutines);
+    
     merge_results(sorted_files,n);
+    for (int i = 0; i < n; ++i) {
+        free(sorted_files[i].data);
+    }
     free(sorted_files);
     for (int i = 0; i < n; ++i) {
         munmap(coroutines[i].stack,stack_size);
     }
+    free(coroutines);
 
     time_t end = clock();
     printf("Total program working time: %f ms\n",((double)(end - begin_main)) / CLOCKS_PER_SEC * 1000);
