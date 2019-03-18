@@ -12,8 +12,9 @@ static void *allocate_stack() {
 
 int main(int argc, char *argv[]) {
     time_t begin_main = clock();
-    const int n = argc - 1;
+    const int n = argc - 2;
     int num_finished = 0;
+    int latency = atoi(argv[1]);
 
     struct coroutine *coroutines = (struct coroutine*)malloc(n*sizeof(struct coroutine));
     array *sorted_files = (array*)malloc(n*sizeof(array));
@@ -24,8 +25,10 @@ int main(int argc, char *argv[]) {
         coroutines[i].context.uc_stack.ss_sp = coroutines[i].stack;
         coroutines[i].context.uc_stack.ss_size = stack_size;
         coroutines[i].context.uc_link = &main_ctx;
-        makecontext(&coroutines[i].context,sort_init,4,&coroutines[i],argv[i+1],&num_finished,&sorted_files[i]);
         coroutines[i].finished = false;
+        coroutines[i].swaps_counter = 0;
+        coroutines[i].latency_ms = latency / n;
+        makecontext(&coroutines[i].context,sort_init,4,&coroutines[i],argv[i+2],&num_finished,&sorted_files[i]);
     }
     
     int i = -1;
