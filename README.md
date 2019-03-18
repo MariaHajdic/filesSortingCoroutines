@@ -2,7 +2,7 @@
 
 Compile:
 
-gcc merge_sort.c coroutines.c -o cor
+gcc merge_sort.c coroutines.c -lrt -o cor
 
 
 Usage:
